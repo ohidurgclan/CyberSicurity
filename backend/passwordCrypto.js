@@ -1,19 +1,20 @@
 /**
- * AES-256-CBC password encryption — implemented from scratch, no libraries.
- * ==========================================================================
+ * AES-256-CBC password encryption — implemented entirely in vanilla JS, no external dependencies
+ * 
+ * This file implements AES-256-CBC encryption and decryption, including:
+ * - Key derivation from a secret key and salt rounds
+ * - PKCS#7 padding for plaintext
+ * - Random IV generation using the platform's CSPRNG
+ * - AES block cipher operations (SubBytes, ShiftRows, MixColumns, AddRoundKey)
+ * - CBC mode chaining of blocks
  * Every piece of the AES algorithm (S-box, key schedule, the four round
  * transformations, and their inverses) is written out below rather than
  * imported. The only platform feature used is crypto.getRandomValues, which
  * is a built-in JS runtime API (not an installable library) used purely to
  * generate a random IV — the cipher itself has no external dependency.
- *
- * This has been checked byte-for-byte against the official FIPS-197 AES-256
- * known-answer test vector, so the core cipher is verified correct.
  */
 
-// ============================================================
-// 1. GF(2^8) arithmetic + S-box (generated, not hand-copied)
-// ============================================================
+//  GF(2^8) arithmetic + S-box 
 
 const gmul = (a, b) => {
   let p = 0;
@@ -28,7 +29,7 @@ const gmul = (a, b) => {
 }
 
 const gf256Inverse = (a) => {
-  if (a === 0) return 0; // 0 has no inverse; AES defines S-box(0) via this special case
+  if (a === 0) return 0;
   for (let x = 1; x < 256; x++) {
     if (gmul(a, x) === 1) return x;
   }
@@ -66,10 +67,6 @@ const SBOX = buildSBox();
 const INV_SBOX = buildInvSBox(SBOX);
 const RCON = [0x00, 0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80, 0x1b, 0x36];
 
-// ============================================================
-// 2. Key expansion — Rijndael key schedule for a 256-bit key
-// ============================================================
-
 const Nb = 4; // block size in 32-bit words (always 4 for AES)
 const Nk = 8; // key length in 32-bit words (8 = AES-256)
 const Nr = 14; // number of rounds (14 = AES-256)
@@ -98,10 +95,6 @@ const keyExpansion = (key) => {
   }
   return w;
 }
-
-// ============================================================
-// 3. The four AES round transformations, and their inverses
-// ============================================================
 
 const addRoundKey = (state, w, round) => {
   for (let c = 0; c < 4; c++) {
@@ -179,9 +172,7 @@ const decryptBlock = (inputBytes, w) => {
   return stateToBytes(state);
 }
 
-// ============================================================
-// 4. Encoding helpers
-// ============================================================
+//  Encoding helpers
 
 const stringToBytes = (str) => {
   return new TextEncoder().encode(str);
@@ -213,10 +204,7 @@ const xorBytes = (a, b) => {
   return out;
 }
 
-// ============================================================
-// 5. PKCS#7 padding — passwords are rarely an exact multiple of
-//    16 bytes, so we pad up to the next block boundary
-// ============================================================
+//  PKCS#7 padding — passwords are rarely an exact multiple of
 
 const pkcs7Pad = (bytes) => {
   const padLen = 16 - (bytes.length % 16);
@@ -233,10 +221,7 @@ const pkcs7Unpad = (bytes) => {
   return bytes.slice(0, bytes.length - padLen);
 }
 
-// ============================================================
 // 6. Random IV — uses the platform's CSPRNG (built into every
-//    browser and modern Node.js, no package needed)
-// ============================================================
 
 const randomBytes = (n) => {
   const bytes = new Uint8Array(n);
@@ -248,14 +233,6 @@ const randomBytes = (n) => {
   return bytes;
 }
 
-// ============================================================
-// 7. Custom key derivation: secret_key + salt_round -> 32-byte key
-//    A real KDF (PBKDF2/Argon2) needs a hash function, which would
-//    mean pulling in another algorithm to implement from scratch.
-//    This is a simpler, self-contained stand-in: salt_round controls
-//    how many mixing passes are applied, the same "more rounds =
-//    harder to brute-force" idea bcrypt's cost factor uses.
-// ============================================================
 
 const deriveKey = (secret_key, salt_round) => {
   const secretBytes = stringToBytes(secret_key);
@@ -271,10 +248,7 @@ const deriveKey = (secret_key, salt_round) => {
   return key;
 }
 
-// ============================================================
-// 8. CBC mode — chains blocks together so identical plaintext
-//    blocks don't produce identical ciphertext blocks
-// ============================================================
+//  CBC mode — chains blocks together so identical plaintext
 
 const aesCbcEncrypt = (plainBytes, key) => {
   const w = keyExpansion(key);
@@ -305,10 +279,8 @@ const aesCbcDecrypt = (ivAndCipher, key) => {
   }
   return pkcs7Unpad(concatBytes(...blocks));
 }
-
-// ============================================================
-// 9. Public API — the two functions you asked for
-// ============================================================
+ 
+//Public API
 
 export const encryptionSync = (password, secret_key, salt_round) => {
   const key = deriveKey(secret_key, salt_round);
@@ -321,19 +293,3 @@ export const decryptionSync = (encryptedPassword, secret_key, salt_round) => {
   const plainBytes = aesCbcDecrypt(hexToBytes(encryptedPassword), key);
   return bytesToString(plainBytes);
 }
-
-// ============================================================
-// Example usage
-// ============================================================
-
-// const SECRET_KEY = process.env.PASSWORD_SECRET_KEY; // never hardcode this
-// const SALT_ROUND = 10;
-//
-// -- Signup --
-// const encrypted = encryptionSync(plainPassword, SECRET_KEY, SALT_ROUND);
-// saveToDatabase({ encryptedPassword: encrypted });
-//
-// -- Login --
-// const storedEncrypted = getFromDatabase().encryptedPassword;
-// const decrypted = decryptionSync(storedEncrypted, SECRET_KEY, SALT_ROUND);
-// const isMatch = decrypted === enteredPassword;

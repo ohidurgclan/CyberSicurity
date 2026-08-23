@@ -54,7 +54,7 @@ const Dashboard = () => {
       </main>
       <footer className="dashboard-footer">
         <span>© {new Date().getFullYear()} SecureAuth With AES-256 All rights reserved.</span>
-        <span>Developed by Md Ohidur Rahman </span>
+        <span>Developed by Md Ohidur Rahman(221002406) & Mahmudul Islam(211002042)</span>
       </footer>
     </div>
   );
